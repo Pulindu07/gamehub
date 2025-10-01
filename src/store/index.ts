@@ -1,5 +1,4 @@
 import { configureStore } from "@reduxjs/toolkit";
-import thunk from "redux-thunk";
 import gameReducer from "./game/gameSlice";
 import playerReducer from "./player/playerSlice";
 import uiReducer from "./ui/uiSlice";
@@ -10,7 +9,8 @@ export const store = configureStore({
     player: playerReducer,
     ui: uiReducer,
   },
-  middleware: (getDefault) => getDefault().prepend(thunk),
+  // RTK includes redux-thunk by default
+  middleware: (getDefault) => getDefault(),
 });
 
 export type AppDispatch = typeof store.dispatch;

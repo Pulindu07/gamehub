@@ -3,17 +3,15 @@ import { type Player } from '../../types'
 
 const initialState: Player | null = null
 
-const slice = createSlice<Player | null, any, 'player'>({
+const reducers = {
+  setPlayer: (_state: Player | null, action: PayloadAction<Player>) => action.payload as Player | null,
+  clearPlayer: (_state: Player | null) => null as Player | null
+}
+
+const slice = createSlice<Player | null, typeof reducers, 'player', never>({
   name: 'player',
   initialState,
-  reducers: {
-    setPlayer: (_state: any, action: PayloadAction<Player>) => {
-      return action.payload
-    },
-    clearPlayer: () => {
-      return null
-    }
-  }
+  reducers
 })
 
 export const { setPlayer, clearPlayer } = slice.actions

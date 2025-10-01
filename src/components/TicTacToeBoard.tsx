@@ -2,26 +2,44 @@ import React from 'react'
 import { useAppSelector, useAppDispatch } from '../store/hooks'
 import { setBoard } from '../store/game/gameSlice'
 
+export default function TicTacToeBoard() {
+  const dispatch = useAppDispatch()
+  const board = useAppSelector(s => s.game.board)
 
-export default function TicTacToeBoard(){
-const dispatch = useAppDispatch()
-const board = useAppSelector(s => s.game.board)
+  const handleClick = (i: number) => {
+    const newBoard = board.map(c => c.index === i ? { ...c, value: c.value ? c.value : 'X' } : c)
+    dispatch(setBoard(newBoard))
+  }
 
+  const getCellClass = (value: string | null) => {
+    if (!value) return 'cell cell-empty'
+    if (value === 'X') return 'cell cell-x'
+    if (value === 'O') return 'cell cell-o'
+    return 'cell'
+  }
 
-const handleClick = (i:number) => {
-const newBoard = board.map(c => c.index === i ? { ...c, value: c.value ? c.value : 'X' } : c)
-dispatch(setBoard(newBoard))
-}
-
-
-return (
-<div>
-<div className="grid grid-cols-3 gap-2">
-{board.map(cell => (
-<button key={cell.index} onClick={()=>handleClick(cell.index)} className="h-24 rounded-lg text-2xl bg-slate-100 flex items-center justify-center">{cell.value || ''}</button>
-))}
-</div>
-<div className="mt-4 text-sm text-slate-600">Turn: placeholder • Realtime placeholder</div>
-</div>
-)
+  return (
+    <div>
+      <div className="board">
+        {board.map(cell => (
+          <button 
+            key={cell.index} 
+            onClick={() => handleClick(cell.index)}
+            disabled={!!cell.value}
+            className={getCellClass(cell.value)}
+          >
+            {cell.value || ''}
+          </button>
+        ))}
+      </div>
+      
+      <div className="text-center mt-6">
+        <div className="badge">
+          <span className="live-dot"></span>
+          <span className="text-sm">Turn: Player X • Realtime placeholder</span>
+        </div>
+        <p className="text-xs" style={{marginTop:8}}>Click any empty cell to make your move</p>
+      </div>
+    </div>
+  )
 }

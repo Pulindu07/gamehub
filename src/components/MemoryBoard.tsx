@@ -1,62 +1,187 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { useAppSelector, useAppDispatch } from '../store/hooks'
-import { setBoard } from '../store/game/gameSlice'
+import { setBoard, setMemorySequence, resetGame, createGame, recordGameResult } from '../store/game/gameSlice'
 
 export default function MemoryBoard() {
   const dispatch = useAppDispatch()
   const board = useAppSelector(s => s.game.board)
+  const gamesWon = useAppSelector(s => s.game.gamesWon)
+  const gamesPlayed = useAppSelector(s => s.game.gamesPlayed)
+  const [playerSequence, setPlayerSequence] = useState<number[]>([])
+  const [gameStarted, setGameStarted] = useState(false)
+  const [gameOver, setGameOver] = useState(false)
+  const [round, setRound] = useState(1)
+  const [gameResultRecorded, setGameResultRecorded] = useState(false)
 
-  const handleFlip = (i: number) => {
-    const newBoard = board.map(c => c.index === i ? { ...c, revealed: !c.revealed, value: c.value ?? String((c.index%9)+1) } : c)
-    dispatch(setBoard(newBoard))
+  // Generate random sequence of numbers 1-9
+  const generateSequence = () => {
+    const numbers = Array.from({length: 9}, (_, i) => i + 1)
+    return numbers.sort(() => Math.random() - 0.5)
   }
 
-  const getCardStyle = (revealed: boolean, value: string | null) => {
-    if (revealed) {
-      return 'bg-gradient-to-br from-emerald-400 to-emerald-600 text-white shadow-lg'
+  // Initialize game
+  useEffect(() => {
+    if (!gameStarted) {
+      const sequence = generateSequence()
+      console.log('Generated sequence:', sequence) // Debug log
+      dispatch(setMemorySequence(sequence))
+      setGameStarted(true)
     }
-    return 'bg-gradient-to-br from-slate-200 to-slate-300 hover:from-slate-300 hover:to-slate-400 text-slate-600'
+  }, [gameStarted, dispatch])
+
+  // Debug log to see board values
+  useEffect(() => {
+    console.log('Board values:', board.map(cell => ({ index: cell.index, value: cell.value, revealed: cell.revealed })))
+  }, [board])
+
+  const handleFlip = (index: number) => {
+    if (gameOver || board[index].revealed) return
+
+    // Always show the number when clicked
+    const newBoard = board.map(cell => 
+      cell.index === index ? { ...cell, revealed: true } : cell
+    )
+    dispatch(setBoard(newBoard))
+
+    const actualValue = parseInt(board[index].value || '0')
+    const expectedValue = playerSequence.length + 1 // Next number in sequence (1, 2, 3...)
+
+    if (actualValue !== expectedValue) {
+      // Wrong number - flip ALL cards back and reset sequence
+      setTimeout(() => {
+        const resetBoard = board.map(cell => ({ ...cell, revealed: false }))
+        dispatch(setBoard(resetBoard))
+        setPlayerSequence([]) // Reset the sequence - start over
+      }, 1000)
+    } else {
+      // Correct number - add to sequence and keep revealed
+      const newPlayerSequence = [...playerSequence, index]
+      setPlayerSequence(newPlayerSequence)
+
+      if (newPlayerSequence.length === 9) {
+        // Completed the sequence!
+        setGameOver(true)
+        if (!gameResultRecorded) {
+          dispatch(recordGameResult({ winner: 'X', isDraw: false }))
+          setGameResultRecorded(true)
+        }
+      }
+    }
+  }
+
+  const getCardClass = (revealed: boolean) => {
+    if (revealed) return 'memory-card memory-card-revealed'
+    return 'memory-card memory-card-hidden'
+  }
+
+  const startNewRound = () => {
+    const sequence = generateSequence()
+    console.log('New round sequence:', sequence) // Debug log
+    dispatch(setMemorySequence(sequence))
+    setPlayerSequence([])
+    setGameOver(false)
+    setGameResultRecorded(false)
+    setRound(prev => prev + 1)
+    
+    // Reset all cards
+    const resetBoard = board.map(cell => ({ ...cell, revealed: false }))
+    dispatch(setBoard(resetBoard))
+  }
+
+  const startNewGame = () => {
+    setGameStarted(false)
+    setGameOver(false)
+    setRound(1)
+    setPlayerSequence([])
+    setGameResultRecorded(false)
+    dispatch(resetGame())
+    setTimeout(() => {
+      dispatch(createGame({ key: 'memory-race' }))
+    }, 100)
+  }
+
+  const getStatusText = () => {
+    if (gameOver) return 'Round Complete!'
+    if (playerSequence.length === 0) return 'Find and click the number 1'
+    return `Find and click the number ${playerSequence.length + 1}`
+  }
+
+  const getWinRate = () => {
+    if (gamesPlayed === 0) return '0%'
+    return `${Math.round((gamesWon / gamesPlayed) * 100)}%`
   }
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-3 gap-3 max-w-sm mx-auto">
+    <div>
+      {/* Game Stats */}
+      <div className="stats" style={{marginBottom: '24px'}}>
+        <div className="stat">
+          <div className="stat-number" style={{fontSize: '2rem'}}>{gamesWon}</div>
+          <div className="stat-label">Rounds Won</div>
+        </div>
+        <div className="stat">
+          <div className="stat-number purple" style={{fontSize: '2rem'}}>{gamesPlayed}</div>
+          <div className="stat-label">Rounds Played</div>
+        </div>
+        <div className="stat">
+          <div className="stat-number green" style={{fontSize: '2rem'}}>{getWinRate()}</div>
+          <div className="stat-label">Win Rate</div>
+        </div>
+      </div>
+
+      {/* Debug info */}
+      <div style={{fontSize: '12px', color: '#666', marginBottom: '10px', textAlign: 'center'}}>
+        Debug: {board.map(cell => `${cell.index}:${cell.value || '?'}`).join(' ')}
+      </div>
+
+      {/* Memory Grid - 3x3 */}
+      <div className="memory-grid-3x3">
         {board.map(cell => (
           <button 
             key={cell.index} 
             onClick={() => handleFlip(cell.index)}
-            className={`
-              h-20 w-20 rounded-xl text-2xl font-bold 
-              flex items-center justify-center 
-              transition-all duration-300 
-              transform hover:scale-105 active:scale-95
-              shadow-lg hover:shadow-xl
-              ${getCardStyle(cell.revealed || false, cell.value)}
-            `}
+            className={getCardClass(!!cell.revealed)}
+            disabled={gameOver}
           >
-            {cell.revealed ? (
-              <span className="animate-bounce">
-                {cell.value}
-              </span>
-            ) : (
-              <span className="text-slate-500 font-medium">
-                ?
-              </span>
-            )}
+{cell.revealed ? (cell.value || '?') : '?'}
           </button>
         ))}
       </div>
       
-      <div className="text-center space-y-2">
-        <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/80 rounded-full shadow-md">
-          <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
-          <span className="text-sm font-medium text-gray-700">
-            Memory Game • Turn placeholder
-          </span>
+      <div className="text-center mt-6">
+        <div className="badge">
+          <span className="live-dot" style={{background:'#f59e0b'}}></span>
+          <span className="text-sm">Round {round} • {getStatusText()}</span>
         </div>
-        <p className="text-xs text-gray-500">
-          Click cards to reveal numbers and test your memory
-        </p>
+        
+        {gameOver && (
+          <div className="mt-6">
+            <div style={{fontSize: '4rem', marginBottom: '16px'}}>🎉</div>
+            <div style={{fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '16px'}}>
+              Perfect Memory!
+            </div>
+            <div className="flex gap-3 justify-center" style={{flexWrap:'wrap'}}>
+              <button 
+                className="btn btn-solid"
+                onClick={startNewRound}
+              >
+                🔄 Next Round
+              </button>
+              <button 
+                className="btn btn-outline"
+                onClick={startNewGame}
+              >
+                🏠 New Game
+              </button>
+            </div>
+          </div>
+        )}
+        
+        {!gameOver && (
+          <p className="text-xs" style={{marginTop:8}}>
+            Click any card to see its number. Find the correct number in sequence (1, 2, 3... 9). Wrong numbers reset the round!
+          </p>
+        )}
       </div>
     </div>
   )

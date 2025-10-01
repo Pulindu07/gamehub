@@ -56,6 +56,14 @@ body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI
 .cell-x { background: linear-gradient(135deg, #60a5fa, #2563eb); color: #fff; }
 .cell-o { background: linear-gradient(135deg, #fb7185, #db2777); color: #fff; }
 
+/* Memory Race - 3x3 Grid */
+.memory-grid-3x3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; max-width: 400px; margin: 0 auto; }
+.memory-card { height: 80px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; box-shadow: 0 6px 16px rgba(0,0,0,0.08); transition: transform .2s ease, box-shadow .2s ease, background .2s ease, color .2s ease; cursor: pointer; }
+.memory-card:hover { transform: scale(1.05); box-shadow: 0 12px 24px rgba(0,0,0,0.12); }
+.memory-card-hidden { background: linear-gradient(135deg, #e5e7eb, #cbd5e1); color: #64748b; }
+.memory-card-revealed { background: linear-gradient(135deg, #34d399, #059669); color: #fff; animation: memoryReveal 0.3s ease; }
+@keyframes memoryReveal { 0%{ transform: scale(0.8); opacity: 0.5; } 100%{ transform: scale(1); opacity: 1; } }
+
 .card-face { height: 80px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; box-shadow: 0 6px 16px rgba(0,0,0,0.08); transition: transform .2s ease, box-shadow .2s ease, background .2s ease, color .2s ease; }
 .card-face-hidden { background: linear-gradient(135deg, #e5e7eb, #cbd5e1); color: #64748b; }
 .card-face-revealed { background: linear-gradient(135deg, #34d399, #059669); color: #fff; }

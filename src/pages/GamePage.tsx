@@ -12,6 +12,8 @@ export default function GamePage() {
   const navigate = useNavigate();
   const keyParam = params.gameId || search.get("game") || "tic-tac-toe";
   const dispatch = useAppDispatch();
+  const gamesWon = useAppSelector(s => s.game.gamesWon);
+  const gamesPlayed = useAppSelector(s => s.game.gamesPlayed);
 
   useEffect(() => {
     // if param looks like a game key, create placeholder game
@@ -49,77 +51,60 @@ export default function GamePage() {
 
   const gameInfo = getGameInfo(keyParam);
 
+  const getWinRate = () => {
+    if (gamesPlayed === 0) return '0%'
+    return `${Math.round((gamesWon / gamesPlayed) * 100)}%`
+  }
+
   return (
-    <div className="min-h-screen">
+    <div>
       {/* Header */}
-      <div className="bg-white/80 backdrop-blur-sm border-b border-white/20 sticky top-0 z-10">
-        <div className="max-w-4xl mx-auto px-6 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <Button 
-                variant="ghost" 
-                onClick={() => navigate("/")}
-                className="text-gray-600 hover:text-gray-800"
-              >
-                ← Back
-              </Button>
-              <div className="flex items-center gap-3">
-                <div className={`w-10 h-10 bg-gradient-to-br ${gameInfo.color} rounded-xl flex items-center justify-center text-xl`}>
-                  {gameInfo.icon}
-                </div>
-                <div>
-                  <h1 className="text-xl font-bold text-gray-800">{gameInfo.title}</h1>
-                  <p className="text-sm text-gray-600">{gameInfo.description}</p>
-                </div>
+      <div className="sticky-header">
+        <div className="header-inner">
+          <div className="title-row">
+            <Button variant="ghost" onClick={() => navigate("/")}>← Back</Button>
+            <div className="title-row">
+              <div className="game-badge">{gameInfo.icon}</div>
+              <div>
+                <h1 className="card-title">{gameInfo.title}</h1>
+                <p className="card-sub">{gameInfo.description}</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <span className="text-sm text-gray-600">Live</span>
-            </div>
+          </div>
+          <div className="title-row">
+            <span className="live-dot"></span>
+            <span className="text-sm text-muted">Live</span>
           </div>
         </div>
       </div>
 
       {/* Game Content */}
-      <div className="max-w-4xl mx-auto px-6 py-8">
-        <div className="bg-white/90 backdrop-blur-sm rounded-3xl shadow-2xl border border-white/20 p-8">
+      <div className="section">
+        <div className="panel">
           {keyParam === "tic-tac-toe" && <TicTacToeBoard />}
           {keyParam === "memory-race" && <MemoryBoard />}
         </div>
 
         {/* Game Stats */}
-        <div className="mt-8 grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-white/50 backdrop-blur-sm rounded-2xl p-4 text-center">
-            <div className="text-2xl font-bold text-indigo-600">0</div>
-            <div className="text-sm text-gray-600">Games Won</div>
+        <div className="stats">
+          <div className="stat">
+            <div className="stat-number" style={{fontSize: '3rem'}}>{gamesWon}</div>
+            <div className="stat-label">Games Won</div>
           </div>
-          <div className="bg-white/50 backdrop-blur-sm rounded-2xl p-4 text-center">
-            <div className="text-2xl font-bold text-purple-600">0</div>
-            <div className="text-sm text-gray-600">Games Played</div>
+          <div className="stat">
+            <div className="stat-number purple" style={{fontSize: '3rem'}}>{gamesPlayed}</div>
+            <div className="stat-label">Games Played</div>
           </div>
-          <div className="bg-white/50 backdrop-blur-sm rounded-2xl p-4 text-center">
-            <div className="text-2xl font-bold text-emerald-600">0%</div>
-            <div className="text-sm text-gray-600">Win Rate</div>
+          <div className="stat">
+            <div className="stat-number green" style={{fontSize: '3rem'}}>{getWinRate()}</div>
+            <div className="stat-label">Win Rate</div>
           </div>
         </div>
 
         {/* Action Buttons */}
-        <div className="mt-8 flex flex-col sm:flex-row gap-4 justify-center">
-          <Button 
-            variant="outline" 
-            size="lg"
-            onClick={() => window.location.reload()}
-          >
-            🔄 New Game
-          </Button>
-          <Button 
-            variant="ghost" 
-            size="lg"
-            onClick={() => navigate("/")}
-          >
-            🏠 Home
-          </Button>
+        <div className="mt-8 flex items-center justify-center gap-4" style={{flexWrap:'wrap'}}>
+          <Button variant="outline" size="lg" onClick={() => window.location.reload()}>🔄 New Game</Button>
+          <Button variant="ghost" size="lg" onClick={() => navigate("/")}>🏠 Home</Button>
         </div>
       </div>
     </div>

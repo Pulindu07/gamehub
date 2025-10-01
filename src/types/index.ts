@@ -18,6 +18,8 @@ board: Cell[]
 turnPlayerId?: string | null
 players: Player[]
 status: 'idle' | 'ongoing' | 'finished'
+gamesWon: number
+gamesPlayed: number
 }
 
 

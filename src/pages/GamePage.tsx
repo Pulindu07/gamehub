@@ -12,8 +12,12 @@ export default function GamePage() {
   const navigate = useNavigate();
   const keyParam = params.gameId || search.get("game") || "tic-tac-toe";
   const dispatch = useAppDispatch();
-  const gamesWon = useAppSelector(s => s.game.gamesWon);
-  const gamesPlayed = useAppSelector(s => s.game.gamesPlayed);
+  const gamesWon = useAppSelector((s) => s.game.gamesWon);
+  const gamesPlayed = useAppSelector((s) => s.game.gamesPlayed);
+
+  const searchParams = new URLSearchParams(location.search);
+  const mode = searchParams.get("mode") === "multiplayer";
+  const gameId = searchParams.get("gameId") || undefined;
 
   useEffect(() => {
     // if param looks like a game key, create placeholder game
@@ -30,21 +34,21 @@ export default function GamePage() {
           title: "Tic Tac Toe",
           icon: "⭕",
           description: "Classic 3x3 strategy game",
-          color: "from-blue-500 to-indigo-600"
+          color: "from-blue-500 to-indigo-600",
         };
       case "memory-race":
         return {
           title: "Memory Race",
           icon: "🧠",
           description: "Test your memory with number cards",
-          color: "from-purple-500 to-pink-600"
+          color: "from-purple-500 to-pink-600",
         };
       default:
         return {
           title: "Game",
           icon: "🎮",
           description: "Unknown game",
-          color: "from-gray-500 to-gray-600"
+          color: "from-gray-500 to-gray-600",
         };
     }
   };
@@ -52,9 +56,9 @@ export default function GamePage() {
   const gameInfo = getGameInfo(keyParam);
 
   const getWinRate = () => {
-    if (gamesPlayed === 0) return '0%'
-    return `${Math.round((gamesWon / gamesPlayed) * 100)}%`
-  }
+    if (gamesPlayed === 0) return "0%";
+    return `${Math.round((gamesWon / gamesPlayed) * 100)}%`;
+  };
 
   return (
     <div>
@@ -62,7 +66,9 @@ export default function GamePage() {
       <div className="sticky-header">
         <div className="header-inner">
           <div className="title-row">
-            <Button variant="ghost" onClick={() => navigate("/")}>← Back</Button>
+            <Button variant="ghost" onClick={() => navigate("/")}>
+              ← Back
+            </Button>
             <div className="title-row">
               <div className="game-badge">{gameInfo.icon}</div>
               <div>
@@ -82,29 +88,48 @@ export default function GamePage() {
       <div className="section">
         <div className="panel">
           {keyParam === "tic-tac-toe" && <TicTacToeBoard />}
-          {keyParam === "memory-race" && <MemoryBoard />}
+          {keyParam === "memory-race" && (
+            <MemoryBoard isMultiplayer={mode} gameId={gameId} />
+          )}
         </div>
 
         {/* Game Stats */}
         <div className="stats">
           <div className="stat">
-            <div className="stat-number" style={{fontSize: '3rem'}}>{gamesWon}</div>
+            <div className="stat-number" style={{ fontSize: "3rem" }}>
+              {gamesWon}
+            </div>
             <div className="stat-label">Games Won</div>
           </div>
           <div className="stat">
-            <div className="stat-number purple" style={{fontSize: '3rem'}}>{gamesPlayed}</div>
+            <div className="stat-number purple" style={{ fontSize: "3rem" }}>
+              {gamesPlayed}
+            </div>
             <div className="stat-label">Games Played</div>
           </div>
           <div className="stat">
-            <div className="stat-number green" style={{fontSize: '3rem'}}>{getWinRate()}</div>
+            <div className="stat-number green" style={{ fontSize: "3rem" }}>
+              {getWinRate()}
+            </div>
             <div className="stat-label">Win Rate</div>
           </div>
         </div>
 
         {/* Action Buttons */}
-        <div className="mt-8 flex items-center justify-center gap-4" style={{flexWrap:'wrap'}}>
-          <Button variant="outline" size="lg" onClick={() => window.location.reload()}>🔄 New Game</Button>
-          <Button variant="ghost" size="lg" onClick={() => navigate("/")}>🏠 Home</Button>
+        <div
+          className="mt-8 flex items-center justify-center gap-4"
+          style={{ flexWrap: "wrap" }}
+        >
+          <Button
+            variant="outline"
+            size="lg"
+            onClick={() => window.location.reload()}
+          >
+            🔄 New Game
+          </Button>
+          <Button variant="ghost" size="lg" onClick={() => navigate("/")}>
+            🏠 Home
+          </Button>
         </div>
       </div>
     </div>

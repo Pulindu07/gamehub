@@ -20,6 +20,9 @@ players: Player[]
 status: 'idle' | 'ongoing' | 'finished'
 gamesWon: number
 gamesPlayed: number
+isMultiplayer: boolean
+connectionStatus: string
+sequence: number[]
 }
 
 

@@ -1,15 +1,25 @@
-import React, { useEffect, useState } from 'react'
-import { useAppSelector, useAppDispatch } from '../store/hooks'
-import { makeMove, resetGame, createGame, recordGameResult } from '../store/game/gameSlice'
+import { useEffect, useState } from 'react';
+import { useAppSelector, useAppDispatch } from '../store/hooks';
+import { makeMove, resetGame, createGame, recordGameResult } from '../store/game/gameSlice';
+import { signalRService } from '../services/signalrService';
 
-export default function TicTacToeBoard() {
+interface TicTacToeBoardProps {
+  isMultiplayer?: boolean;
+  gameId?: string;
+  playerName?: string;
+  gameKey?: string;
+}
+
+export default function TicTacToeBoard({
+  isMultiplayer = false,
+  gameId,
+  playerName,
+  gameKey
+}: TicTacToeBoardProps) {
   const dispatch = useAppDispatch()
   const board = useAppSelector(s => s.game.board)
-  const turnPlayerId = useAppSelector(s => s.game.turnPlayerId)
-  const gameStatus = useAppSelector(s => s.game.status)
-  const gamesWon = useAppSelector(s => s.game.gamesWon)
-  const gamesPlayed = useAppSelector(s => s.game.gamesPlayed)
   const [gameResultRecorded, setGameResultRecorded] = useState(false)
+  const [connectionStarted, setConnectionStarted] = useState(false);
 
   // Check for win condition
   const checkWinner = (board: any[]) => {
@@ -74,9 +84,13 @@ export default function TicTacToeBoard() {
 
   // Handle player move
   const handleClick = (index: number) => {
-    if (turnPlayerId !== 'player1' || board[index].value) return
-    
-    dispatch(makeMove({ index, value: 'X' }))
+    if (turnPlayerId !== 'player1' || board[index].value) return;
+
+    if (isMultiplayer && gameId) {
+      signalRService.sendFlip(index); // Send move to server
+    } else {
+      dispatch(makeMove({ index, value: 'X' }));
+    }
   }
 
   // AI move effect
@@ -95,6 +109,35 @@ export default function TicTacToeBoard() {
       }
     }
   }, [turnPlayerId, board, dispatch, gameStatus])
+
+  // SignalR connection effect for multiplayer
+  useEffect(() => {
+    if (isMultiplayer && gameId && !connectionStarted) {
+      const startConnection = async () => {
+        try {
+          await signalRService.start(gameId);
+          setConnectionStarted(true);
+
+          signalRService.onBoardUpdate((updatedBoard) => {
+            dispatch(makeMove(updatedBoard));
+          });
+
+          signalRService.onGameOver(() => {
+            dispatch(recordGameResult({ winner: 'O', isDraw: false }));
+          });
+        } catch (error) {
+          console.error('Failed to start SignalR connection:', error);
+        }
+      };
+      startConnection();
+
+      // Cleanup on unmount
+      return () => {
+        signalRService.stop();
+        setConnectionStarted(false);
+      };
+    }
+  }, [isMultiplayer, gameId, connectionStarted, dispatch]);
 
   const getCellClass = (value: string | null) => {
     if (!value) return 'cell cell-empty'
@@ -121,11 +164,6 @@ export default function TicTacToeBoard() {
     if (turnPlayerId === 'player1') return 'Your turn (X)'
     if (turnPlayerId === 'player2') return 'AI thinking...'
     return 'Game ready'
-  }
-
-  const getWinRate = () => {
-    if (gamesPlayed === 0) return '0%'
-    return `${Math.round((gamesWon / gamesPlayed) * 100)}%`
   }
 
   return (

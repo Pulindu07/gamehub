@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import { useAppSelector, useAppDispatch } from "../store/hooks";
 import {
   setBoard,
@@ -8,22 +8,27 @@ import {
   recordGameResult,
 } from "../store/game/gameSlice";
 import type { Cell } from "../types";
-import { signalRService } from '../services/signalrService'
-
+import { apiService } from '../services/apiService'
+import Button from "./Button";
 
 interface MemoryBoardProps {
   isMultiplayer?: boolean;
   gameId?: string; // only needed if multiplayer
+  playerName?: string;
+  gameKey?: string;
 }
 
 export default function MemoryBoard({
   isMultiplayer = false,
   gameId,
+  playerName,
+  gameKey,
 }: MemoryBoardProps) {
   const dispatch = useAppDispatch();
   const board = useAppSelector((s) => s.game.board);
   const gamesWon = useAppSelector((s) => s.game.gamesWon);
   const gamesPlayed = useAppSelector((s) => s.game.gamesPlayed);
+  const connectionStatus = useAppSelector((s) => s.game.connectionStatus);
 
   // gridSize can be 4, 9, 16
   const [gridSize, setGridSize] = useState<number>(9);
@@ -31,17 +36,16 @@ export default function MemoryBoard({
   const [gameStarted, setGameStarted] = useState(false);
   const [gameOver, setGameOver] = useState(false);
   const [round, setRound] = useState(1);
-  const [gameResultRecorded, setGameResultRecorded] = useState(false);
   const [isFlippingBack, setIsFlippingBack] = useState(false);
-  const [connectionStarted, setConnectionStarted] = useState(false)
-
-  
+  const [connectionError, setConnectionError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
+  const maxRetries = 3;
 
   // helper: generate sequence 1..n shuffled
-  const generateSequence = (n = gridSize) => {
+  const generateSequence = useCallback((n = gridSize) => {
     const numbers = Array.from({ length: n }, (_, i) => i + 1);
     return numbers.sort(() => Math.random() - 0.5);
-  };
+  }, [gridSize]);
 
   useEffect(() => {
     if (!gameStarted && !isMultiplayer) {
@@ -57,27 +61,56 @@ export default function MemoryBoard({
       setGameOver(false)
       setGameStarted(true)
     }
-  }, [gameStarted, gridSize, isMultiplayer, dispatch])
+  }, [gameStarted, gridSize, isMultiplayer, dispatch, generateSequence])
+
+  // Cleanup function for SignalR subscriptions
+  const cleanupSignalR = useCallback(() => {
+    if (isMultiplayer) {
+      apiService.stop();
+      setRetryCount(0);
+      setConnectionError(null);
+    }
+  }, [isMultiplayer]);
 
   useEffect(() => {
-    if (isMultiplayer && gameId && !connectionStarted) {
-      const startConnection = async () => {
-        await signalRService.start(gameId) // connects & joins game
-        setConnectionStarted(true)
+    if (isMultiplayer) {
+      const connectToGame = async () => {
+        try {
+          setConnectionError(null);
+          // pass playerName and gameKey so service can create game when missing
+          await apiService.start(gameId || null, playerName, gameKey);
+          
+          // Store cleanup functions for each subscription
+          apiService.onBoardUpdate((updatedBoard: Cell[]) => {
+            dispatch(setBoard(updatedBoard));
+          });
 
-        // Listen for board updates from server
-        signalRService.onBoardUpdate((updatedBoard: Cell[]) => {
-          dispatch(setMultiplayerBoard(updatedBoard))
-        })
+          apiService.onGameOver(() => {
+            setGameOver(true);
+          });
 
-        // Listen for game over from server
-        signalRService.onGameOver(() => {
-          setGameOver(true)
-        })
-      }
-      startConnection()
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Failed to connect to game';
+          setConnectionError(errorMessage);
+          console.error("Game connection error:", error);
+          
+          if (retryCount < maxRetries) {
+            const retryDelay = Math.min(1000 * Math.pow(2, retryCount), 5000);
+            const timeoutId = setTimeout(() => {
+              setRetryCount(prev => prev + 1);
+              connectToGame();
+            }, retryDelay);
+            
+            // Clean up timeout if component unmounts during retry delay
+            return () => clearTimeout(timeoutId);
+          }
+        }
+      };
+
+      connectToGame();
+      return cleanupSignalR;
     }
-  }, [isMultiplayer, gameId, connectionStarted, dispatch])
+  }, [isMultiplayer, gameId, playerName, gameKey, dispatch, retryCount, maxRetries, cleanupSignalR]);
 
   // Initialize board & sequence for the chosen gridSize (runs when gameStarted false)
   useEffect(() => {
@@ -98,19 +131,24 @@ export default function MemoryBoard({
 
       setNextNumberToFind(1);
       setGameOver(false);
-      setGameResultRecorded(false);
       setGameStarted(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameStarted, gridSize, dispatch]);
 
-  const handleFlip = (index: number) => {
-    if (gameOver || isFlippingBack) return
+  const handleFlip = async (index: number) => {
+    if (gameOver || isFlippingBack) return;
 
     if (isMultiplayer && gameId) {
-      // multiplayer: send flip to backend
-      signalRService.sendFlip(index)
-      return
+      try {
+        setConnectionError(null);
+        await apiService.sendFlip(index);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Failed to make move';
+        setConnectionError(errorMessage);
+        console.error("Failed to send flip:", error);
+      }
+      return;
     }
 
     // --- SOLO LOGIC AS-IS ---
@@ -155,16 +193,23 @@ export default function MemoryBoard({
     setGameOver(false);
     setRound(1);
     setNextNumberToFind(1);
-    setGameResultRecorded(false);
+    setConnectionError(null);
+    setRetryCount(0);
 
     dispatch(resetGame());
     // optional: also dispatch(createGame({ key: 'memory-race' })) if you rely on slice's metadata
-    dispatch(createGame({ key: "memory-race" }));
+    dispatch(createGame({ key: "memory-race", isMultiplayer }));
     // the effect will setBoard and setMemorySequence for the new size
   };
 
   // wrapper for existing single-size startNewGame button
   const startNewGame = () => startNewGameWithSize(gridSize);
+
+  const handleRetryConnection = () => {
+    setRetryCount(0);
+    setConnectionError(null);
+    apiService.start(gameId || null, playerName, gameKey).catch(err => console.error('Retry connection failed', err));
+  };
 
   const getStatusText = () => {
     if (gameOver) return "Round Complete!";
@@ -188,7 +233,7 @@ export default function MemoryBoard({
 
   return (
     <div>
-      {/* Controls: choose grid size */}
+      {/* Controls */}
       <div
         style={{
           display: "flex",
@@ -200,22 +245,63 @@ export default function MemoryBoard({
         <button
           className={`btn ${gridSize === 4 ? "btn-active" : ""}`}
           onClick={() => startNewGameWithSize(4)}
+          disabled={isMultiplayer}
         >
           2×2
         </button>
         <button
           className={`btn ${gridSize === 9 ? "btn-active" : ""}`}
           onClick={() => startNewGameWithSize(9)}
+          disabled={isMultiplayer}
         >
           3×3
         </button>
         <button
           className={`btn ${gridSize === 16 ? "btn-active" : ""}`}
           onClick={() => startNewGameWithSize(16)}
+          disabled={isMultiplayer}
         >
           4×4
         </button>
       </div>
+
+      {/* Connection status */}
+      {isMultiplayer && (
+        <div className="text-center mb-4">
+          <div className={`badge ${
+            connectionStatus === 'connected' ? 'bg-green-100' :
+            connectionStatus === 'connecting' ? 'bg-yellow-100' :
+            'bg-red-100'
+          }`}>
+            <span className={`live-dot ${
+              connectionStatus === 'connected' ? 'bg-green-500' :
+              connectionStatus === 'connecting' ? 'bg-yellow-500' :
+              'bg-red-500'
+            }`} />
+            <span className="text-sm">
+              {connectionStatus === 'connected' ? 'Connected' :
+               connectionStatus === 'connecting' ? 'Connecting...' :
+               'Disconnected'}
+            </span>
+          </div>
+          
+          {connectionError && (
+            <div className="mt-4">
+              <div className="text-red-600 text-sm mb-2">
+                {connectionError}
+              </div>
+              {retryCount >= maxRetries && (
+                <Button
+                  variant="outline"
+                  onClick={handleRetryConnection}
+                >
+                  🔄 Retry Connection
+                </Button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Game Stats */}
       <div
@@ -254,7 +340,12 @@ export default function MemoryBoard({
             key={cell.index}
             onClick={() => handleFlip(cell.index)}
             className={getCardClass(!!cell.revealed)}
-            disabled={gameOver || isFlippingBack}
+            disabled={
+              gameOver || 
+              isFlippingBack || 
+              (isMultiplayer && connectionStatus !== 'connected') ||
+              cell.revealed
+            }
             style={{ height: 72, fontSize: 18 }}
           >
             {cell.revealed ? cell.value ?? "?" : "?"}
@@ -262,22 +353,9 @@ export default function MemoryBoard({
         ))}
       </div>
 
-      <div
-        className="text-center mt-6"
-        style={{ textAlign: "center", marginTop: 12 }}
-      >
-        <div className="badge" style={{ marginBottom: 8 }}>
-          <span
-            className="live-dot"
-            style={{
-              background: "#f59e0b",
-              display: "inline-block",
-              width: 8,
-              height: 8,
-              borderRadius: 16,
-              marginRight: 8,
-            }}
-          />
+      <div className="text-center mt-6">
+        <div className="badge">
+          <span className="live-dot" style={{ background: "#f59e0b" }} />
           <span className="text-sm">
             Round {round} • {getStatusText()}
           </span>
@@ -286,32 +364,16 @@ export default function MemoryBoard({
         {gameOver ? (
           <div className="mt-6">
             <div style={{ fontSize: "3rem", marginBottom: "12px" }}>🎉</div>
-            <div
-              style={{
-                fontSize: "1.25rem",
-                fontWeight: "bold",
-                marginBottom: "12px",
-              }}
-            >
+            <div style={{ fontSize: "1.25rem", fontWeight: "bold", marginBottom: "12px" }}>
               Perfect Memory!
             </div>
-            <div
-              style={{
-                display: "flex",
-                gap: 12,
-                justifyContent: "center",
-                flexWrap: "wrap",
-              }}
-            >
-              <button className="btn btn-outline" onClick={startNewGame}>
-                🔄 New Game
-              </button>
-            </div>
+            <Button variant="outline" onClick={startNewGame}>
+              🔄 New Game
+            </Button>
           </div>
         ) : (
-          <p className="text-xs" style={{ marginTop: 8 }}>
-            Click cards to find numbers in order (1→2→3...→{gridSize}). Wrong
-            number resets all cards!
+          <p className="text-xs mt-2">
+            Click cards to find numbers in order (1→2→3...→{gridSize}). Wrong number resets all cards!
           </p>
         )}
       </div>

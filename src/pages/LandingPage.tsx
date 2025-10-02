@@ -23,7 +23,7 @@ const games = [
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const { createInvite, shareWhatsApp } = useInvite();
+  // const { createInvite, shareWhatsApp } = useInvite();
 
   return (
     <div>
@@ -41,10 +41,10 @@ export default function LandingPage() {
       <div className="container-lg">
         <div className="grid-1-2">
           {games.map((game) => (
-            <Card key={game.key} title={game.title} subtitle={game.desc} icon={game.icon}>
+            <Card key={game.key} title={game.title} subtitle={game.desc}>
               <div className="flex gap-3 mt-6" style={{flexWrap:'wrap'}}>
                 <Button onClick={() => navigate(`/game/${game.key}`)} size="lg" className="flex-1">🎯 Play Solo</Button>
-                <Button
+                {/* <Button
                   variant="outline"
                   size="lg"
                   onClick={() => {
@@ -54,7 +54,7 @@ export default function LandingPage() {
                   className="flex-1"
                 >
                   📱 Invite & Share
-                </Button>
+                </Button> */}
               </div>
             </Card>
           ))}

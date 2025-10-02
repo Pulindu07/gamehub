@@ -7,7 +7,6 @@ interface CardProps {
   children?: React.ReactNode
   className?: string
   variant?: 'default' | 'elevated' | 'outlined'
-  icon?: React.ReactNode
 }
 
 export default function Card({ 
@@ -15,27 +14,22 @@ export default function Card({
   subtitle, 
   children, 
   className = '',
-  variant = 'default',
-  icon
+  variant = 'default'
 }: CardProps) {
   const variantClasses = {
-    default: 'bg-white/90 backdrop-blur-sm border border-white/20',
-    elevated: 'bg-white shadow-2xl border-0',
-    outlined: 'bg-transparent border-2 border-indigo-200'
+    default: 'bg-slate-50/95 backdrop-blur-sm shadow-lg hover:shadow-xl',
+    elevated: 'bg-slate-50 shadow-2xl',
+    outlined: 'bg-slate-50/90 border-2 border-indigo-200 shadow-lg hover:shadow-xl'
   }
 
   return (
     <div className={clsx(
-      'rounded-2xl p-6 transition-all duration-300 hover:scale-[1.02] hover:shadow-xl',
+      'rounded-2xl p-6 transition-all duration-300 hover:scale-[1.02] hover:-translate-y-1',
+      'relative transform',
       variantClasses[variant],
       className
     )}>
-      <div className="flex items-start gap-3 mb-4">
-        {icon && (
-          <div className="flex-shrink-0 w-8 h-8 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-lg flex items-center justify-center text-white">
-            {icon}
-          </div>
-        )}
+      <div className="flex flex-col items-center text-center gap-3 mb-4">
         <div className="flex-1">
           <h3 className="text-xl font-bold text-gray-900 mb-1">{title}</h3>
           {subtitle && (

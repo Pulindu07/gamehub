@@ -1,109 +1,128 @@
 import React, { useEffect, useState } from 'react'
 import { useAppSelector, useAppDispatch } from '../store/hooks'
-import { setBoard, setMemorySequence, resetGame, createGame, recordGameResult } from '../store/game/gameSlice'
+import {
+  setBoard,
+  setMemorySequence,
+  resetGame,
+  createGame,
+  recordGameResult
+} from '../store/game/gameSlice'
+import type { Cell } from '../types'
 
 export default function MemoryBoard() {
   const dispatch = useAppDispatch()
   const board = useAppSelector(s => s.game.board)
   const gamesWon = useAppSelector(s => s.game.gamesWon)
   const gamesPlayed = useAppSelector(s => s.game.gamesPlayed)
-  const [playerSequence, setPlayerSequence] = useState<number[]>([])
+
+  // gridSize can be 4, 9, 16
+  const [gridSize, setGridSize] = useState<number>(9)
+  const [nextNumberToFind, setNextNumberToFind] = useState(1)
   const [gameStarted, setGameStarted] = useState(false)
   const [gameOver, setGameOver] = useState(false)
   const [round, setRound] = useState(1)
   const [gameResultRecorded, setGameResultRecorded] = useState(false)
+  const [isFlippingBack, setIsFlippingBack] = useState(false)
 
-  // Generate random sequence of numbers 1-9
-  const generateSequence = () => {
-    const numbers = Array.from({length: 9}, (_, i) => i + 1)
+  // helper: generate sequence 1..n shuffled
+  const generateSequence = (n = gridSize) => {
+    const numbers = Array.from({ length: n }, (_, i) => i + 1)
     return numbers.sort(() => Math.random() - 0.5)
   }
 
-  // Initialize game
+  // Initialize board & sequence for the chosen gridSize (runs when gameStarted false)
   useEffect(() => {
     if (!gameStarted) {
-      const sequence = generateSequence()
-      console.log('Generated sequence:', sequence) // Debug log
-      dispatch(setMemorySequence(sequence))
+      // create empty board for the chosen size
+      const initialBoard: Cell[] = Array.from({ length: gridSize }, (_, i) => ({
+        index: i,
+        value: null,
+        revealed: false
+      }))
+
+      dispatch(setBoard(initialBoard))
+
+      // create and set the sequence (fixed for the whole game)
+      const seq = generateSequence(gridSize)
+      console.log('Initial sequence for size', gridSize, seq)
+      dispatch(setMemorySequence(seq))
+
+      setNextNumberToFind(1)
+      setGameOver(false)
+      setGameResultRecorded(false)
       setGameStarted(true)
     }
-  }, [gameStarted, dispatch])
-
-  // Debug log to see board values
-  useEffect(() => {
-    console.log('Board values:', board.map(cell => ({ index: cell.index, value: cell.value, revealed: cell.revealed })))
-  }, [board])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gameStarted, gridSize, dispatch])
 
   const handleFlip = (index: number) => {
-    if (gameOver || board[index].revealed) return
+    if (gameOver || isFlippingBack) return
+    if (!board[index]) return
+    if (board[index].revealed) return
 
-    // Always show the number when clicked
-    const newBoard = board.map(cell => 
+    const clickedValue = parseInt(board[index].value || '0', 10)
+    console.log('Clicked:', clickedValue, 'Expected:', nextNumberToFind)
+
+    // reveal clicked card immediately
+    const newBoard = board.map(cell =>
       cell.index === index ? { ...cell, revealed: true } : cell
     )
     dispatch(setBoard(newBoard))
 
-    const actualValue = parseInt(board[index].value || '0')
-    const expectedValue = playerSequence.length + 1 // Next number in sequence (1, 2, 3...)
-
-    if (actualValue !== expectedValue) {
-      // Wrong number - flip ALL cards back and reset sequence
-      setTimeout(() => {
-        const resetBoard = board.map(cell => ({ ...cell, revealed: false }))
-        dispatch(setBoard(resetBoard))
-        setPlayerSequence([]) // Reset the sequence - start over
-      }, 1000)
-    } else {
-      // Correct number - add to sequence and keep revealed
-      const newPlayerSequence = [...playerSequence, index]
-      setPlayerSequence(newPlayerSequence)
-
-      if (newPlayerSequence.length === 9) {
-        // Completed the sequence!
-        setGameOver(true)
-        if (!gameResultRecorded) {
-          dispatch(recordGameResult({ winner: 'X', isDraw: false }))
-          setGameResultRecorded(true)
-        }
+    // correct pick
+    if (clickedValue === nextNumberToFind) {
+      // if it was the last number -> complete round
+      if (clickedValue === gridSize) {
+        setTimeout(() => {
+          setGameOver(true)
+          if (!gameResultRecorded) {
+            dispatch(recordGameResult({ winner: 'X', isDraw: false }))
+            setGameResultRecorded(true)
+          }
+        }, 300)
+        return
       }
+
+      // advance to next expected number
+      setNextNumberToFind(prev => prev + 1)
+      return
     }
+
+    // wrong pick -> flip all cards back after short delay (per your rule)
+    setIsFlippingBack(true)
+    setTimeout(() => {
+      const resetBoard = board.map(cell => ({ ...cell, revealed: false }))
+      dispatch(setBoard(resetBoard))
+      setNextNumberToFind(1)
+      setIsFlippingBack(false)
+    }, 800)
   }
 
-  const getCardClass = (revealed: boolean) => {
-    if (revealed) return 'memory-card memory-card-revealed'
-    return 'memory-card memory-card-hidden'
-  }
+  const getCardClass = (revealed: boolean) =>
+    revealed ? 'memory-card memory-card-revealed' : 'memory-card memory-card-hidden'
+  
 
-  const startNewRound = () => {
-    const sequence = generateSequence()
-    console.log('New round sequence:', sequence) // Debug log
-    dispatch(setMemorySequence(sequence))
-    setPlayerSequence([])
-    setGameOver(false)
-    setGameResultRecorded(false)
-    setRound(prev => prev + 1)
-    
-    // Reset all cards
-    const resetBoard = board.map(cell => ({ ...cell, revealed: false }))
-    dispatch(setBoard(resetBoard))
-  }
-
-  const startNewGame = () => {
-    setGameStarted(false)
+  // Start a fresh new game with the currently selected grid size
+  const startNewGameWithSize = (size: number) => {
+    setGridSize(size)
+    setGameStarted(false) // trigger useEffect to re-init board & sequence
     setGameOver(false)
     setRound(1)
-    setPlayerSequence([])
+    setNextNumberToFind(1)
     setGameResultRecorded(false)
+
     dispatch(resetGame())
-    setTimeout(() => {
-      dispatch(createGame({ key: 'memory-race' }))
-    }, 100)
+    // optional: also dispatch(createGame({ key: 'memory-race' })) if you rely on slice's metadata
+    dispatch(createGame({ key: 'memory-race' }))
+    // the effect will setBoard and setMemorySequence for the new size
   }
+
+  // wrapper for existing single-size startNewGame button
+  const startNewGame = () => startNewGameWithSize(gridSize)
 
   const getStatusText = () => {
     if (gameOver) return 'Round Complete!'
-    if (playerSequence.length === 0) return 'Find and click the number 1'
-    return `Find and click the number ${playerSequence.length + 1}`
+    return `Find number ${nextNumberToFind}`
   }
 
   const getWinRate = () => {
@@ -111,75 +130,90 @@ export default function MemoryBoard() {
     return `${Math.round((gamesWon / gamesPlayed) * 100)}%`
   }
 
+  // grid columns = sqrt(gridSize) (2, 3, or 4)
+  const gridCols = Math.sqrt(gridSize)
+  const gridStyle: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: `repeat(${gridCols}, 1fr)`,
+    gap: '8px',
+    maxWidth: `${gridCols * 80}px`,
+    margin: '0 auto'
+  }
+
   return (
     <div>
+      {/* Controls: choose grid size */}
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginBottom: 12 }}>
+        <button
+          className={`btn ${gridSize === 4 ? 'btn-active' : ''}`}
+          onClick={() => startNewGameWithSize(4)}
+        >
+          2×2
+        </button>
+        <button
+          className={`btn ${gridSize === 9 ? 'btn-active' : ''}`}
+          onClick={() => startNewGameWithSize(9)}
+        >
+          3×3
+        </button>
+        <button
+          className={`btn ${gridSize === 16 ? 'btn-active' : ''}`}
+          onClick={() => startNewGameWithSize(16)}
+        >
+          4×4
+        </button>
+      </div>
+
       {/* Game Stats */}
-      <div className="stats" style={{marginBottom: '24px'}}>
+      <div className="stats" style={{ marginBottom: '16px', display: 'flex', gap: 16, justifyContent: 'center' }}>
         <div className="stat">
-          <div className="stat-number" style={{fontSize: '2rem'}}>{gamesWon}</div>
+          <div className="stat-number" style={{ fontSize: '1.6rem' }}>{gamesWon}</div>
           <div className="stat-label">Rounds Won</div>
         </div>
         <div className="stat">
-          <div className="stat-number purple" style={{fontSize: '2rem'}}>{gamesPlayed}</div>
+          <div className="stat-number purple" style={{ fontSize: '1.6rem' }}>{gamesPlayed}</div>
           <div className="stat-label">Rounds Played</div>
         </div>
         <div className="stat">
-          <div className="stat-number green" style={{fontSize: '2rem'}}>{getWinRate()}</div>
+          <div className="stat-number green" style={{ fontSize: '1.6rem' }}>{getWinRate()}</div>
           <div className="stat-label">Win Rate</div>
         </div>
       </div>
 
-      {/* Debug info */}
-      <div style={{fontSize: '12px', color: '#666', marginBottom: '10px', textAlign: 'center'}}>
-        Debug: {board.map(cell => `${cell.index}:${cell.value || '?'}`).join(' ')}
-      </div>
-
-      {/* Memory Grid - 3x3 */}
-      <div className="memory-grid-3x3">
-        {board.map(cell => (
-          <button 
-            key={cell.index} 
+      {/* Memory Grid */}
+      <div style={gridStyle}>
+        {board.map((cell: Cell) => (
+          <button
+            key={cell.index}
             onClick={() => handleFlip(cell.index)}
             className={getCardClass(!!cell.revealed)}
-            disabled={gameOver}
+            disabled={gameOver || isFlippingBack}
+            style={{ height: 72, fontSize: 18 }}
           >
-{cell.revealed ? (cell.value || '?') : '?'}
+            {cell.revealed ? (cell.value ?? '?') : '?'}
           </button>
         ))}
       </div>
-      
-      <div className="text-center mt-6">
-        <div className="badge">
-          <span className="live-dot" style={{background:'#f59e0b'}}></span>
+
+      <div className="text-center mt-6" style={{ textAlign: 'center', marginTop: 12 }}>
+        <div className="badge" style={{ marginBottom: 8 }}>
+          <span className="live-dot" style={{ background: '#f59e0b', display: 'inline-block', width: 8, height: 8, borderRadius: 16, marginRight: 8 }} />
           <span className="text-sm">Round {round} • {getStatusText()}</span>
         </div>
-        
-        {gameOver && (
+
+        {gameOver ? (
           <div className="mt-6">
-            <div style={{fontSize: '4rem', marginBottom: '16px'}}>🎉</div>
-            <div style={{fontSize: '1.5rem', fontWeight: 'bold', marginBottom: '16px'}}>
+            <div style={{ fontSize: '3rem', marginBottom: '12px' }}>🎉</div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 'bold', marginBottom: '12px' }}>
               Perfect Memory!
             </div>
-            <div className="flex gap-3 justify-center" style={{flexWrap:'wrap'}}>
-              <button 
-                className="btn btn-solid"
-                onClick={startNewRound}
-              >
-                🔄 Next Round
-              </button>
-              <button 
-                className="btn btn-outline"
-                onClick={startNewGame}
-              >
-                🏠 New Game
-              </button>
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button className="btn btn-outline" onClick={startNewGame}>🔄 New Game</button>
             </div>
           </div>
-        )}
-        
-        {!gameOver && (
-          <p className="text-xs" style={{marginTop:8}}>
-            Click any card to see its number. Find the correct number in sequence (1, 2, 3... 9). Wrong numbers reset the round!
+        ) : (
+          <p className="text-xs" style={{ marginTop: 8 }}>
+            Click cards to find numbers in order (1→2→3...→{gridSize}). Wrong number resets all cards!
           </p>
         )}
       </div>
